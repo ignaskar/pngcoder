@@ -94,7 +94,7 @@ impl Display for ChunkTypeError {
                 write!(f, "Invalid chunk length: {length}. Expected: 4")
             }
             ChunkTypeError::InvalidCharacter => {
-                write!(f, "Invalid character detected!")
+                write!(f, "Invalid character detected. Valid characters: [Aa..=Zz]")
             }
         }
     }
