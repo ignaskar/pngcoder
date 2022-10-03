@@ -1,5 +1,6 @@
 use core::fmt;
 use std::fmt::{Display, Formatter};
+use crc::Crc;
 
 use crate::chunk_type::ChunkType;
 use crate::{Result, Error, MAX_CHUNK_LEN};
@@ -34,15 +35,11 @@ impl Chunk {
     }
 
     pub fn crc(&self) -> u32 {
-        crc::crc32::checksum_ieee(
-            self.chunk_type
-                .bytes()
-                .iter()
-                .chain(self.data.iter())
-                .copied()
-                .collect::<Vec<u8>>()
-                .as_slice(),
-        )
+        let hasher = Crc::<u32>::new(&crc::CRC_32_ISO_HDLC);
+        let mut digest = hasher.digest();
+        digest.update(&self.chunk_type.bytes());
+        digest.update(&self.data);
+        digest.finalize()
     }
 
     pub fn data_as_string(&self) -> Result<String> {
@@ -92,20 +89,27 @@ impl TryFrom<&[u8]> for Chunk {
 
     fn try_from(value: &[u8]) -> std::result::Result<Self, Self::Error> {
         if value.len() < 12 { return Err(Box::new(ChunkError::InvalidChunkLength(value.len()))) }
+        let data_length = u32::from_be_bytes(value[0..4].try_into()?);
+        let chunk_type_bytes: [u8; 4] = [
+            value[4],
+            value[5],
+            value[6],
+            value[7],
+        ];
 
-        let crc_offset = value.len() - 4;
-
-        let chunk_type_bytes = &value[4..=7];
-        let sized_chunk_type_bytes: [u8; 4] = chunk_type_bytes.try_into()?;
-        let chunk_type = ChunkType::try_from(sized_chunk_type_bytes)?;
-
+        let chunk_type = ChunkType::try_from(chunk_type_bytes)?;
         if !chunk_type.is_valid() { return Err(Box::new(ChunkError::InvalidChunkType)) }
 
-        let chunk_data = value[8..crc_offset].to_vec();
+        let data = value[8..(8 + data_length as usize)].to_vec();
+        let chunk = Chunk::new(chunk_type, data);
 
-        let chunk = Chunk::new(chunk_type, chunk_data);
+        let crc = u32::from_be_bytes(
+            value[8 + data_length as usize..12 + data_length as usize].try_into()?
+        );
 
-        validate_crc(&chunk, value, crc_offset)?;
+        let calculated_crc = chunk.crc();
+
+        if crc != calculated_crc { return Err(Box::new(ChunkError::CrcMismatch(crc, calculated_crc))); }
 
         Ok(chunk)
     }

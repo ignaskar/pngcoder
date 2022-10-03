@@ -2,6 +2,7 @@ extern crate core;
 
 mod chunk_type;
 mod chunk;
+mod png;
 
 pub const MAX_CHUNK_LEN: u32 = 2147483648;
 
