@@ -1,5 +1,6 @@
 use core::fmt;
 use std::fmt::{Display, Formatter};
+use std::io::{BufReader, Read};
 use crc::Crc;
 
 use crate::chunk_type::ChunkType;
@@ -89,40 +90,29 @@ impl TryFrom<&[u8]> for Chunk {
 
     fn try_from(value: &[u8]) -> std::result::Result<Self, Self::Error> {
         if value.len() < 12 { return Err(Box::new(ChunkError::InvalidChunkLength(value.len()))) }
-        let data_length = u32::from_be_bytes(value[0..4].try_into()?);
-        let chunk_type_bytes: [u8; 4] = [
-            value[4],
-            value[5],
-            value[6],
-            value[7],
-        ];
+        let mut reader = BufReader::new(value);
+        let mut buffer: [u8; 4] = [0, 0, 0, 0];
 
-        let chunk_type = ChunkType::try_from(chunk_type_bytes)?;
+        reader.read_exact(&mut buffer)?;
+        let data_length = u32::from_be_bytes(buffer);
+
+        reader.read_exact(&mut buffer)?;
+        let chunk_type = ChunkType::try_from(buffer)?;
         if !chunk_type.is_valid() { return Err(Box::new(ChunkError::InvalidChunkType)) }
 
-        let data = value[8..(8 + data_length as usize)].to_vec();
+        let mut data = vec![0; data_length as usize];
+        reader.read_exact(&mut data)?;
+
         let chunk = Chunk::new(chunk_type, data);
 
-        let crc = u32::from_be_bytes(
-            value[8 + data_length as usize..12 + data_length as usize].try_into()?
-        );
-
+        reader.read_exact(&mut buffer)?;
+        let crc = u32::from_be_bytes(buffer);
         let calculated_crc = chunk.crc();
 
-        if crc != calculated_crc { return Err(Box::new(ChunkError::CrcMismatch(crc, calculated_crc))); }
+        if crc != calculated_crc { return Err(Box::new(ChunkError::CrcMismatch(crc, calculated_crc))) }
 
         Ok(chunk)
     }
-}
-
-fn validate_crc(chunk: &Chunk, bytes: &[u8], offset: usize) -> Result<()> {
-    let crc_bytes = &bytes[offset..];
-    let actual_crc = chunk.crc();
-    let expected_crc = u32::from_be_bytes(crc_bytes.try_into()?);
-
-    if actual_crc != expected_crc { return Err(Box::new(ChunkError::CrcMismatch(expected_crc, actual_crc))); }
-
-    Ok(())
 }
 
 impl Display for Chunk {
