@@ -1,4 +1,5 @@
 use std::fmt::{Display, Formatter};
+use std::path::Path;
 use crate::chunk::Chunk;
 use crate::{Result, Error};
 
@@ -13,6 +14,11 @@ impl Png {
         Self {
             chunks
         }
+    }
+
+    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let bytes = std::fs::read(path)?;
+        Png::try_from(bytes.as_slice())
     }
 
     pub fn append_chunk(&mut self, chunk: Chunk) {
