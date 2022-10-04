@@ -2,7 +2,8 @@
 Encode/decode data in PNG files as chunks.
 
 ## Build from source
-Clone this repository and run `cargo build --release`
+Clone this repository and run `cargo build --release`\
+Requires Rust 1.64.0 or above.
 
 ## Usage
 `pngcoder encode ./dice.png ruSt "This is a secret message!`
